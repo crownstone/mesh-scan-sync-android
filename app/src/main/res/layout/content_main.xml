@@ -1,0 +1,77 @@
+<RelativeLayout
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:paddingBottom="@dimen/activity_vertical_margin"
+	android:paddingLeft="@dimen/activity_horizontal_margin"
+	android:paddingRight="@dimen/activity_horizontal_margin"
+	android:paddingTop="@dimen/activity_vertical_margin"
+	app:layout_behavior="@string/appbar_scrolling_view_behavior"
+	tools:context="nl.dobots.crownstonehub.MainActivity"
+	tools:showIn="@layout/activity_main">
+
+	<TextView
+		android:id="@+id/title"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="@string/main_title"
+		android:textAppearance="?android:attr/textAppearanceLarge"
+		android:layout_alignParentTop="true"
+		/>
+
+	<TextView
+		android:id="@+id/welcome"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:text="@string/main_welcome"
+		android:layout_below="@+id/title"
+		android:layout_marginTop="16dp"
+		/>
+
+	<LinearLayout
+		android:id="@+id/layScan"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:orientation="horizontal"
+		android:layout_below="@+id/welcome"
+		android:layout_marginTop="16dp"
+		>
+
+		<Button
+			android:id="@+id/btnScan"
+			android:layout_width="0dp"
+			android:layout_weight="1"
+			android:layout_height="wrap_content"
+			android:text="@string/main_scan"
+			/>
+
+		<Spinner
+			android:id="@+id/spFilter"
+			android:layout_width="0dp"
+			android:layout_weight="1"
+			android:layout_height="wrap_content">
+
+		</Spinner>
+
+	</LinearLayout>
+
+	<TextView
+		android:id="@+id/txtClosest"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:text="@string/main_closest_device"
+		android:layout_alignParentBottom="true"
+		android:layout_marginTop="16dp"
+		/>
+
+	<ListView
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:id="@+id/lvScanList"
+		android:layout_below="@+id/layScan"
+		android:layout_above="@+id/txtClosest"
+		/>
+
+</RelativeLayout>
