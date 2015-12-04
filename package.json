@@ -1,0 +1,33 @@
+{
+  "name": "Crownstone",
+  "version": "0.0.1",
+  "main": "server/server.js",
+  "scripts": {
+    "pretest": "jshint ."
+  },
+  "dependencies": {
+    "async": "*",
+    "compression": "^1.0.3",
+    "cors": "^2.5.2",
+    "loopback": "^2.22.0",
+    "loopback-boot": "^2.6.5",
+    "loopback-component-explorer": "^2.1.0",
+    "loopback-connector-mongodb": "^1.13.0",
+    "loopback-connector-sendgrid": "^1.2.1",
+    "loopback-datasource-juggler": "^2.39.0",
+    "body-parser": "^1.10.0",
+    "errorhandler": "^1.1.1",
+    "serve-favicon": "^2.0.1"
+  },
+  "devDependencies": {
+    "jshint": "^2.5.6"
+  },
+  "repository": {
+    "type": "",
+    "url": ""
+  },
+  "description": "Crownstone",
+  "engines": {
+    "node": "0.12.x"
+  }
+}

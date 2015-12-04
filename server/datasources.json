@@ -1,0 +1,12 @@
+{
+  "db": {
+    "name": "db",
+    "connector": "memory"
+  },
+  "mongoDs": {
+    "name": "mongoDs"
+  },
+  "sendgridDs": {
+    "name": "sendgridDs"
+  }
+}
