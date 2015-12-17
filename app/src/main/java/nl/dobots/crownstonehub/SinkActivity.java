@@ -103,8 +103,8 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 				if (_ble.hasCharacteristic(BluenetConfig.MESH_DATA_CHARACTERISTIC_UUID, null)) {
 					_connected = true;
 
-//					_ble.subscribeMeshData(SinkActivity.this);
-					_ble.readMeshData(SinkActivity.this);
+					_ble.subscribeMeshData(SinkActivity.this);
+//					_ble.readMeshData(SinkActivity.this);
 
 					dlg.dismiss();
 				} else {
