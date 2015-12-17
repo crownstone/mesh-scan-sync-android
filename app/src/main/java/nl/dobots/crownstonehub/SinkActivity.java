@@ -2,8 +2,8 @@ package nl.dobots.crownstonehub;
 
 import android.app.ProgressDialog;
 import android.os.Bundle;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -13,13 +13,13 @@ import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
 
-import org.json.JSONObject;
+import com.strongloop.android.loopback.RestAdapter;
+import com.strongloop.android.loopback.callbacks.ObjectCallback;
+import com.strongloop.android.loopback.callbacks.VoidCallback;
 
 import java.util.ArrayList;
 
-import nl.dobots.bluenet.ble.base.callbacks.IDataCallback;
 import nl.dobots.bluenet.ble.base.callbacks.IDiscoveryCallback;
-import nl.dobots.bluenet.ble.base.callbacks.IIntegerCallback;
 import nl.dobots.bluenet.ble.base.callbacks.IMeshDataCallback;
 import nl.dobots.bluenet.ble.base.callbacks.IStatusCallback;
 import nl.dobots.bluenet.ble.base.structs.mesh.BleMeshData;
@@ -27,6 +27,10 @@ import nl.dobots.bluenet.ble.base.structs.mesh.BleMeshScanData;
 import nl.dobots.bluenet.ble.cfg.BluenetConfig;
 import nl.dobots.bluenet.ble.extended.BleExt;
 import nl.dobots.bluenet.ble.extended.structs.BleDeviceList;
+import nl.dobots.loopback.CrownstoneRestAPI;
+import nl.dobots.loopback.loopback.Beacon;
+import nl.dobots.loopback.loopback.BeaconRepository;
+import nl.dobots.loopback.loopback.Scan;
 
 public class SinkActivity extends AppCompatActivity implements IMeshDataCallback {
 
@@ -42,6 +46,9 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 	private ArrayList<BleMeshScanData> _scanList = new ArrayList<>();
 	private ListView _deviceList;
 
+	private RestAdapter _restAdapter;
+	private BeaconRepository _beaconRepository;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -52,6 +59,9 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 		initUI();
 
 		_address = getIntent().getStringExtra("address");
+
+		_restAdapter = CrownstoneRestAPI.getRestAdapter(this);
+		_beaconRepository = CrownstoneRestAPI.getBeaconRepository();
 
 		_bleDeviceList = new BleDeviceList();
 		_adapter = new DeviceListAdapter(this, _bleDeviceList);
@@ -93,7 +103,8 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 				if (_ble.hasCharacteristic(BluenetConfig.MESH_DATA_CHARACTERISTIC_UUID, null)) {
 					_connected = true;
 
-					_ble.subscribeMeshData(SinkActivity.this);
+//					_ble.subscribeMeshData(SinkActivity.this);
+					_ble.readMeshData(SinkActivity.this);
 
 					dlg.dismiss();
 				} else {
@@ -161,10 +172,50 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 	}
 
 	@Override
-	public void onData(BleMeshData data) {
+	public void onData(final BleMeshData data) {
 		if (data != null) {
 			Log.i(TAG, data.toString());
-			_scanList.add((BleMeshScanData) data);
+			final BleMeshScanData meshScanData = (BleMeshScanData) data;
+
+//			_ble.unsubscribeMeshData(SinkActivity.this);
+
+			CrownstoneRestAPI.post(new Runnable() {
+				@Override
+				public void run() {
+
+				_beaconRepository.findByAddress(meshScanData.getSourceAddress(), new ObjectCallback<Beacon>() {
+					@Override
+					public void onSuccess(Beacon beacon) {
+						Scan scan = new Scan();
+						scan.setTimestamp(meshScanData.getTimeStamp());
+
+						BleMeshScanData.ScannedDevice[] devices = meshScanData.getDevices();
+						for (BleMeshScanData.ScannedDevice dev : devices) {
+							scan.addScannedDevice(dev.getAddress(), dev.getRssi(), dev.getOccurrences());
+						}
+
+						beacon.addScan(beacon.getId(), scan, new VoidCallback() {
+							@Override
+							public void onSuccess() {
+								Log.i(TAG, "success");
+							}
+
+							@Override
+							public void onError(Throwable t) {
+								Log.i(TAG, "error: ", t);
+							}
+						});
+					}
+
+					@Override
+					public void onError(Throwable t) {
+						Log.i(TAG, "error: ", t);
+					}
+				});
+				}
+			});
+
+			_scanList.add(meshScanData);
 			_deviceList.post(new Runnable() {
 				@Override
 				public void run() {

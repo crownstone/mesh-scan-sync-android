@@ -1,6 +1,5 @@
 package nl.dobots.crownstonehub;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -14,12 +13,17 @@ import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import com.strongloop.android.loopback.RestAdapter;
+
 import nl.dobots.bluenet.ble.base.callbacks.IStatusCallback;
 import nl.dobots.bluenet.ble.extended.BleDeviceFilter;
 import nl.dobots.bluenet.ble.extended.BleExt;
 import nl.dobots.bluenet.ble.extended.callbacks.IBleDeviceCallback;
 import nl.dobots.bluenet.ble.extended.structs.BleDevice;
 import nl.dobots.bluenet.ble.extended.structs.BleDeviceList;
+import nl.dobots.loopback.CrownstoneRestAPI;
+import nl.dobots.loopback.gui.LoginActivity;
+import nl.dobots.loopback.loopback.UserRepository;
 
 /**
  * This example activity shows the use of the bluenet library. The library is first initialized,
@@ -54,6 +58,10 @@ public class MainActivity extends AppCompatActivity {
 	private static final int GUI_UPDATE_INTERVAL = 500;
 	private long _lastUpdate;
 
+	private RestAdapter _restAdapter;
+
+	private UserRepository _userRepository;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -81,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
 			}
 		});
 
+		_restAdapter = CrownstoneRestAPI.initializeApi(this);
 	}
 
 	@Override
@@ -89,6 +98,19 @@ public class MainActivity extends AppCompatActivity {
 		// finish has to be called on the library to release the objects if the library
 		// is not used anymore
 		_ble.destroy();
+	}
+
+	@Override
+	protected void onResume() {
+		super.onResume();
+
+		_userRepository = CrownstoneRestAPI.getUserRepository();
+
+		if (!_userRepository.isLoggedIn()) {
+			startActivity(new Intent(this, LoginActivity.class));
+			return;
+		}
+
 	}
 
 	private void initUI() {

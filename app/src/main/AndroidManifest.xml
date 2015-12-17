@@ -2,6 +2,14 @@
 <manifest package="nl.dobots.crownstonehub"
 		  xmlns:android="http://schemas.android.com/apk/res/android">
 
+	<uses-permission android:name="android.permission.INTERNET"/>
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+	<!-- To auto-complete the email text field in the login form with the user's emails -->
+	<uses-permission android:name="android.permission.GET_ACCOUNTS"/>
+	<uses-permission android:name="android.permission.READ_PROFILE"/>
+	<uses-permission android:name="android.permission.READ_CONTACTS"/>
+
 	<application
 		android:allowBackup="true"
 		android:icon="@mipmap/ic_launcher"
@@ -22,6 +30,10 @@
 			android:name=".SinkActivity"
 			android:label="@string/title_activity_sink"
 			android:theme="@style/AppTheme.NoActionBar">
+		</activity>
+		<activity
+			android:name="nl.dobots.loopback.gui.LoginActivity"
+			android:label="@string/title_activity_login">
 		</activity>
 	</application>
 

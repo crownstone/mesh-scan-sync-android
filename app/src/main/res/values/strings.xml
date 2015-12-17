@@ -8,5 +8,6 @@
 	<string name="main_closest_device">Closest device: %s</string>
 	<string name="main_title">Welcome</string>
 	<string name="title_activity_sink">SinkActivity</string>
+	<string name="title_activity_login">Sign in</string>
 
 </resources>
