@@ -32,7 +32,7 @@
 			android:theme="@style/AppTheme.NoActionBar">
 		</activity>
 		<activity
-			android:name="nl.dobots.loopback.gui.LoginActivity"
+			android:name="nl.dobots.crownstonehub.LoginActivity"
 			android:label="@string/title_activity_login">
 		</activity>
 	</application>
