@@ -5,8 +5,10 @@ import android.animation.AnimatorListenerAdapter;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.LoaderManager.LoaderCallbacks;
+import android.content.Context;
 import android.content.CursorLoader;
 import android.content.Loader;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
@@ -33,6 +35,7 @@ import com.strongloop.android.loopback.RestAdapter;
 import java.util.ArrayList;
 import java.util.List;
 
+import nl.dobots.crownstonehub.cfg.Settings;
 import nl.dobots.loopback.CrownstoneRestAPI;
 import nl.dobots.loopback.loopback.User;
 import nl.dobots.loopback.loopback.UserRepository;
@@ -71,6 +74,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
 	private RestAdapter _restAdapter;
 
+	private Settings _settings;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -102,56 +107,13 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 		mLoginFormView = findViewById(R.id.login_form);
 		mProgressView = findViewById(R.id.login_progress);
 
+		_settings = Settings.getInstance(getApplicationContext());
+		mEmailView.setText(_settings.getUsername());
+		mPasswordView.setText(_settings.getPassword());
+
 //		_restAdapter = new RestAdapter(getApplicationContext(), Config.REST_API_URL);
 		_restAdapter = CrownstoneRestAPI.getRestAdapter(this, nl.dobots.loopback.cfg.Config.REST_API_URL);
 
-		Button btnHans = (Button) findViewById(R.id.btnHans);
-		btnHans.setOnClickListener(new OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				final UserRepository userRepo = _restAdapter.createRepository(UserRepository.class);
-				userRepo.getCurrentUserId();
-				userRepo.loginUser("dominik@dobots.nl", "do123", new UserRepository.LoginCallback() {
-
-					@Override
-					public void onSuccess(AccessToken token, User currentUser) {
-						Log.i(TAG, token.getUserId() + ":" + currentUser.getId());
-						showProgress(false);
-						finish();
-					}
-
-					@Override
-					public void onError(Throwable t) {
-						Log.i(TAG, "error: ", t);
-						showProgress(false);
-					}
-				});
-			}
-		});
-
-		Button btnPeet = (Button) findViewById(R.id.btnPeet);
-		btnPeet.setOnClickListener(new OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				final UserRepository userRepo = _restAdapter.createRepository(UserRepository.class);
-				userRepo.getCurrentUserId();
-				userRepo.loginUser("peet@dobots.nl", "do123", new UserRepository.LoginCallback() {
-
-					@Override
-					public void onSuccess(AccessToken token, User currentUser) {
-						Log.i(TAG, token.getUserId() + ":" + currentUser.getId());
-						showProgress(false);
-						finish();
-					}
-
-					@Override
-					public void onError(Throwable t) {
-						Log.i(TAG, "error: ", t);
-						showProgress(false);
-					}
-				});
-			}
-		});
 	}
 
 	private void populateAutoComplete() {
@@ -196,7 +158,6 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 			}
 		}
 	}
-
 
 	/**
 	 * Attempts to sign in or register the account specified by the login form.
@@ -245,6 +206,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 			// Show a progress spinner, and kick off a background task to
 			// perform the user login attempt.
 			showProgress(true);
+
+			_settings.saveLogin(email, password);
 
 			final UserRepository userRepo = _restAdapter.createRepository(UserRepository.class);
 			userRepo.getCurrentUserId();

@@ -109,12 +109,13 @@ public class DeviceScanAdapter extends BaseAdapter {
 			viewHolder.devSource.setText(device.getSourceAddress());
 
 //			String scan = String.format("%17s   %4s   %4s\r\n", "Address", "RSSI", "Occ");
-			String scan = "";
-			BleMeshScanData.ScannedDevice[] devices = device.getDevices();
-			for (BleMeshScanData.ScannedDevice dev : devices) {
-				scan += String.format("%s   %4d   %4d\r\n", dev.getAddress(), dev.getRssi(), dev.getOccurrences());
-			}
-			viewHolder.devScan.setText(scan);
+//			String scan = "";
+//			BleMeshScanData.ScannedDevice[] devices = device.getDevices();
+//			for (BleMeshScanData.ScannedDevice dev : devices) {
+//				scan += String.format("%s   %4d   %4d\r\n", dev.getAddress(), dev.getRssi(), dev.getOccurrences());
+//			}
+//			viewHolder.devScan.setText(scan);
+			viewHolder.devScan.setVisibility(View.GONE);
 		}
 
 		return convertView;

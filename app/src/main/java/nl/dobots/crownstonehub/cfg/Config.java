@@ -21,6 +21,8 @@ public class Config {
 
 	public static final boolean DEBUG = true;
 
+	public static final int MAX_DISPLAY_RESULTS = 50;
+
 //	public static final int PRESENCE_THRESHOLD = -70;
 //
 //	public static final int LOW_SCAN_INTERVAL = 2000; // milli seconds scanning

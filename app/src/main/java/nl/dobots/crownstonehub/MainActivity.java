@@ -15,6 +15,7 @@ import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import com.strongloop.android.loopback.AccessToken;
 import com.strongloop.android.loopback.RestAdapter;
 
 import nl.dobots.bluenet.ble.base.callbacks.IStatusCallback;
@@ -23,7 +24,9 @@ import nl.dobots.bluenet.ble.extended.BleExt;
 import nl.dobots.bluenet.ble.extended.callbacks.IBleDeviceCallback;
 import nl.dobots.bluenet.ble.extended.structs.BleDevice;
 import nl.dobots.bluenet.ble.extended.structs.BleDeviceList;
+import nl.dobots.crownstonehub.cfg.Settings;
 import nl.dobots.loopback.CrownstoneRestAPI;
+import nl.dobots.loopback.loopback.User;
 import nl.dobots.loopback.loopback.UserRepository;
 
 /**
@@ -63,6 +66,8 @@ public class MainActivity extends AppCompatActivity {
 
 	private UserRepository _userRepository;
 
+	private Settings _settings;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -91,6 +96,32 @@ public class MainActivity extends AppCompatActivity {
 		});
 
 		_restAdapter = CrownstoneRestAPI.initializeApi(this);
+
+		_settings = Settings.getInstance(getApplicationContext());
+
+		// TODO: this should not be necessary once the cloud is running correctly, but because
+		// the heroku app is shutting down if it is idle for some time, the cloud loses the
+		// access tokens, so to be save we login every time we start the app
+		String username = _settings.getUsername();
+		String password = _settings.getPassword();
+		if (!(username.isEmpty() && password.isEmpty())) {
+			final UserRepository userRepo = _restAdapter.createRepository(UserRepository.class);
+			userRepo.getCurrentUserId();
+			userRepo.loginUser(username, password, new UserRepository.LoginCallback() {
+
+				@Override
+				public void onSuccess(AccessToken token, User currentUser) {
+					Log.i(TAG, token.getUserId() + ":" + currentUser.getId());
+				}
+
+				@Override
+				public void onError(Throwable t) {
+					Log.i(TAG, "error: ", t);
+					startActivity(new Intent(MainActivity.this, LoginActivity.class));
+					return;
+				}
+			});
+		}
 	}
 
 	@Override

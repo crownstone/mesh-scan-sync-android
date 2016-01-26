@@ -1,9 +1,10 @@
 package nl.dobots.crownstonehub;
 
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.DialogInterface;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -11,22 +12,22 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ListAdapter;
 import android.widget.ListView;
-import android.widget.Toast;
 
 import com.strongloop.android.loopback.RestAdapter;
 import com.strongloop.android.loopback.callbacks.ObjectCallback;
 import com.strongloop.android.loopback.callbacks.VoidCallback;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import nl.dobots.bluenet.ble.base.callbacks.IDiscoveryCallback;
 import nl.dobots.bluenet.ble.base.callbacks.IMeshDataCallback;
 import nl.dobots.bluenet.ble.base.callbacks.IStatusCallback;
-import nl.dobots.bluenet.ble.base.structs.mesh.BleMeshData;
+import nl.dobots.bluenet.ble.base.structs.mesh.BleMeshHubData;
 import nl.dobots.bluenet.ble.base.structs.mesh.BleMeshScanData;
 import nl.dobots.bluenet.ble.cfg.BluenetConfig;
 import nl.dobots.bluenet.ble.extended.BleExt;
-import nl.dobots.bluenet.ble.extended.structs.BleDeviceList;
+import nl.dobots.crownstonehub.cfg.Config;
 import nl.dobots.loopback.CrownstoneRestAPI;
 import nl.dobots.loopback.loopback.Beacon;
 import nl.dobots.loopback.loopback.BeaconRepository;
@@ -40,14 +41,15 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 	private BleExt _ble;
 
 	private boolean _connected;
-	private DeviceListAdapter _adapter;
-	private BleDeviceList _bleDeviceList;
 
 	private ArrayList<BleMeshScanData> _scanList = new ArrayList<>();
 	private ListView _deviceList;
 
 	private RestAdapter _restAdapter;
 	private BeaconRepository _beaconRepository;
+	private DeviceScanAdapter _deviceScanAdapter;
+
+	private Handler _uiHandler = new Handler();
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -63,9 +65,6 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 		_restAdapter = CrownstoneRestAPI.getRestAdapter(this);
 		_beaconRepository = CrownstoneRestAPI.getBeaconRepository();
 
-		_bleDeviceList = new BleDeviceList();
-		_adapter = new DeviceListAdapter(this, _bleDeviceList);
-
 		// create our access point to the library, and make sure it is initialized (if it
 		// wasn't already)
 		_ble = new BleExt();
@@ -78,6 +77,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 			@Override
 			public void onError(int error) {
 				Log.e(TAG, "onError: " + error);
+				showErrorAlert("BLE Error. Please check your bluetooth and try again.");
 			}
 		});
 
@@ -109,13 +109,14 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 					dlg.dismiss();
 				} else {
 					// return an error and exit if the PWM characteristic is not available
-					runOnUiThread(new Runnable() {
-						@Override
-						public void run() {
-							Toast.makeText(SinkActivity.this, "No PWM Characteristic found for this device!", Toast.LENGTH_LONG).show();
-						}
-					});
-					finish();
+//					runOnUiThread(new Runnable() {
+//						@Override
+//						public void run() {
+//							Toast.makeText(SinkActivity.this, "No PWM Characteristic found for this device!", Toast.LENGTH_LONG).show();
+//						}
+//					});
+//					finish();
+					showErrorAlert("No PWM Characteristic found for this device!");
 				}
 			}
 
@@ -124,6 +125,14 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 				// an error occurred during connect/discover
 				Log.e(TAG, "failed to connect/discover: " + error);
 				dlg.dismiss();
+//				runOnUiThread(new Runnable() {
+//					@Override
+//					public void run() {
+//						Toast.makeText(SinkActivity.this, "Error during discovery! Please try again", Toast.LENGTH_LONG).show();
+//					}
+//				});
+//				finish();
+				showErrorAlert("Error during discovery! Please try again");
 			}
 		});
 
@@ -135,15 +144,35 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 //						.setAction("Action", null).show();
 //			}
 //		});
+
+		_uiHandler.postDelayed(new Runnable() {
+			@Override
+			public void run() {
+				while (_scanList.size() > Config.MAX_DISPLAY_RESULTS) {
+					_scanList.remove(_scanList.size()-1);
+				}
+				_deviceScanAdapter.notifyDataSetChanged();
+
+//				setListViewHeightBasedOnChildren(_deviceList);
+
+				_uiHandler.postDelayed(this, 1000);
+			}
+		}, 1000);
+
 	}
 
 	private void initUI() {
 
-		DeviceScanAdapter adapter = new DeviceScanAdapter(this, _scanList);
+		_deviceScanAdapter = new DeviceScanAdapter(this, _scanList);
 
 		_deviceList = (ListView) findViewById(R.id.lvDeviceList);
-		_deviceList.setAdapter(adapter);
+		_deviceList.setAdapter(_deviceScanAdapter);
 
+	}
+
+	@Override
+	protected void onResume() {
+		super.onResume();
 	}
 
 	@Override
@@ -171,33 +200,28 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 		finish();
 	}
 
+	HashMap<String, Beacon> _beaconDbCache = new HashMap<>();
+
 	@Override
-	public void onData(final BleMeshData data) {
+	public void onData(final BleMeshHubData data) {
 		if (data != null) {
 			Log.i(TAG, data.toString());
 			final BleMeshScanData meshScanData = (BleMeshScanData) data;
 
 //			_ble.unsubscribeMeshData(SinkActivity.this);
 
+			final String address = meshScanData.getSourceAddress();
 			CrownstoneRestAPI.post(new Runnable() {
 				@Override
 				public void run() {
-
-				_beaconRepository.findByAddress(meshScanData.getSourceAddress(), new ObjectCallback<Beacon>() {
-					@Override
-					public void onSuccess(Beacon beacon) {
-						Scan scan = new Scan();
-						scan.setTimestamp(meshScanData.getTimeStamp());
-
-						BleMeshScanData.ScannedDevice[] devices = meshScanData.getDevices();
-						for (BleMeshScanData.ScannedDevice dev : devices) {
-							scan.addScannedDevice(dev.getAddress(), dev.getRssi(), dev.getOccurrences());
-						}
-
-						beacon.addScan(beacon.getId(), scan, new VoidCallback() {
+					if (_beaconDbCache.containsKey(address)) {
+						uploadScan(_beaconDbCache.get(address), meshScanData);
+					} else {
+						_beaconRepository.findByAddress(address, new ObjectCallback<Beacon>() {
 							@Override
-							public void onSuccess() {
-								Log.i(TAG, "success");
+							public void onSuccess(Beacon beacon) {
+								_beaconDbCache.put(address, beacon);
+								uploadScan(beacon, meshScanData);
 							}
 
 							@Override
@@ -206,24 +230,57 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 							}
 						});
 					}
-
-					@Override
-					public void onError(Throwable t) {
-						Log.i(TAG, "error: ", t);
-					}
-				});
 				}
 			});
 
-			_scanList.add(meshScanData);
-			_deviceList.post(new Runnable() {
+			_uiHandler.post(new Runnable() {
 				@Override
 				public void run() {
-					_adapter.notifyDataSetChanged();
-					setListViewHeightBasedOnChildren(_deviceList);
+					_scanList.add(0, meshScanData);
+//					setListViewHeightBasedOnChildren(_deviceList);
 				}
 			});
 		}
+	}
+
+	private void uploadScan(Beacon beacon, BleMeshScanData meshScanData) {
+		Scan scan = new Scan();
+		scan.setTimestamp(meshScanData.getTimeStamp());
+
+		BleMeshScanData.ScannedDevice[] devices = meshScanData.getDevices();
+		for (BleMeshScanData.ScannedDevice dev : devices) {
+			scan.addScannedDevice(dev.getAddress(), dev.getRssi(), dev.getOccurrences());
+		}
+
+		beacon.addScan(beacon.getId(), scan, new VoidCallback() {
+			@Override
+			public void onSuccess() {
+				Log.i(TAG, "success");
+			}
+
+			@Override
+			public void onError(Throwable t) {
+				Log.i(TAG, "error: ", t);
+			}
+		});
+	}
+
+	private void showErrorAlert(final String text) {
+		runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				AlertDialog.Builder builder = new AlertDialog.Builder(SinkActivity.this);
+				builder.setTitle("Error")
+						.setMessage(text)
+						.setNeutralButton("OK", new DialogInterface.OnClickListener() {
+							@Override
+							public void onClick(DialogInterface dialog, int which) {
+								SinkActivity.this.finish();
+							}
+						});
+				builder.create().show();
+			}
+		});
 	}
 
 	public static void setListViewHeightBasedOnChildren(ListView listView) {
