@@ -2,6 +2,7 @@ package nl.dobots.crownstonehub;
 
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.os.Handler;
@@ -16,8 +17,19 @@ import android.widget.ListView;
 import com.strongloop.android.loopback.RestAdapter;
 import com.strongloop.android.loopback.callbacks.ObjectCallback;
 import com.strongloop.android.loopback.callbacks.VoidCallback;
+import com.strongloop.android.remoting.JsonUtil;
 
+import org.json.JSONException;
+
+import java.io.BufferedWriter;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 
 import nl.dobots.bluenet.ble.base.callbacks.IDiscoveryCallback;
@@ -51,6 +63,11 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 
 	private Handler _uiHandler = new Handler();
 
+	private boolean _logFileOpen;
+	private File _scanBackupFile;
+	private OutputStream _scanBackupDos;
+	private BufferedWriter _bufferedWriter;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -62,8 +79,10 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 
 		_address = getIntent().getStringExtra("address");
 
-		_restAdapter = CrownstoneRestAPI.getRestAdapter(this);
-		_beaconRepository = CrownstoneRestAPI.getBeaconRepository();
+		if (!Config.OFFLINE) {
+			_restAdapter = CrownstoneRestAPI.getRestAdapter(this);
+			_beaconRepository = CrownstoneRestAPI.getBeaconRepository();
+		}
 
 		// create our access point to the library, and make sure it is initialized (if it
 		// wasn't already)
@@ -98,15 +117,17 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 				// once discovery is completed, this function will be called. we can now execute
 				// the functions on the device. in this case, we want to know what the current
 				// PWM state is
+				_connected = true;
 
 				// so first we check if the PWM characteristic is available on this device
 				if (_ble.hasCharacteristic(BluenetConfig.MESH_DATA_CHARACTERISTIC_UUID, null)) {
-					_connected = true;
 
 					_ble.subscribeMeshData(SinkActivity.this);
 //					_ble.readMeshData(SinkActivity.this);
 
 					dlg.dismiss();
+
+					_logFileOpen = openBackupFile(SinkActivity.this);
 				} else {
 					// return an error and exit if the PWM characteristic is not available
 //					runOnUiThread(new Runnable() {
@@ -116,7 +137,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 //						}
 //					});
 //					finish();
-					showErrorAlert("No PWM Characteristic found for this device!");
+					showErrorAlert("No Mesh Characteristic found for this device!");
 				}
 			}
 
@@ -149,7 +170,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 			@Override
 			public void run() {
 				while (_scanList.size() > Config.MAX_DISPLAY_RESULTS) {
-					_scanList.remove(_scanList.size()-1);
+					_scanList.remove(_scanList.size() - 1);
 				}
 				_deviceScanAdapter.notifyDataSetChanged();
 
@@ -159,6 +180,30 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 			}
 		}, 1000);
 
+	}
+
+	private boolean openBackupFile(Context context) {
+
+		SimpleDateFormat sdf = new SimpleDateFormat("yyMMdd_HHmmss");
+		String fileName = "scan_backup_" + sdf.format(new Date()) + ".txt";
+
+		File path = context.getExternalFilesDir(null);
+//		File path = new File(Environment.getExternalStorageDirectory().getPath() + "/dobots/crownstone");
+		_scanBackupFile = new File(path, fileName);
+
+//		Log.i(TAG, "external storage path: " + path.getAbsolutePath());
+
+//		_scanBackupFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName);
+		try {
+			path.mkdirs();
+			_scanBackupDos = new DataOutputStream(new FileOutputStream(_scanBackupFile));
+		} catch (IOException e) {
+			Log.e(TAG, "Error creating " + _scanBackupFile, e);
+
+			return false;
+		}
+
+		return true;
 	}
 
 	private void initUI() {
@@ -192,6 +237,15 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 			});
 		}
 		_ble.destroy();
+
+		try {
+			if (_logFileOpen) {
+				_scanBackupDos.flush();
+				_scanBackupDos.close();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Override
@@ -210,47 +264,79 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 
 //			_ble.unsubscribeMeshData(SinkActivity.this);
 
-			final String address = meshScanData.getSourceAddress();
-			CrownstoneRestAPI.post(new Runnable() {
-				@Override
-				public void run() {
-					if (_beaconDbCache.containsKey(address)) {
-						uploadScan(_beaconDbCache.get(address), meshScanData);
-					} else {
-						_beaconRepository.findByAddress(address, new ObjectCallback<Beacon>() {
-							@Override
-							public void onSuccess(Beacon beacon) {
-								_beaconDbCache.put(address, beacon);
-								uploadScan(beacon, meshScanData);
-							}
+			final Scan scan = new Scan();
+			scan.setTimestamp(meshScanData.getTimeStamp());
 
-							@Override
-							public void onError(Throwable t) {
-								Log.i(TAG, "error: ", t);
-							}
-						});
+			BleMeshScanData.ScannedDevice[] devices = meshScanData.getDevices();
+			for (BleMeshScanData.ScannedDevice dev : devices) {
+				scan.addScannedDevice(dev.getAddress(), dev.getRssi(), dev.getOccurrences());
+			}
+
+			final String address = meshScanData.getSourceAddress();
+
+			if (!Config.OFFLINE) {
+				CrownstoneRestAPI.post(new Runnable() {
+					@Override
+					public void run() {
+						if (_beaconDbCache.containsKey(address)) {
+							uploadScan(_beaconDbCache.get(address), scan);
+						} else {
+							_beaconRepository.findByAddress(address, new ObjectCallback<Beacon>() {
+								@Override
+								public void onSuccess(Beacon beacon) {
+									_beaconDbCache.put(address, beacon);
+									uploadScan(beacon, scan);
+								}
+
+								@Override
+								public void onError(Throwable t) {
+									Log.i(TAG, "error: ", t);
+								}
+							});
+						}
 					}
-				}
-			});
+				});
+			}
 
 			_uiHandler.post(new Runnable() {
 				@Override
 				public void run() {
 					_scanList.add(0, meshScanData);
+
+					writeToBackupFile(scan);
+
 //					setListViewHeightBasedOnChildren(_deviceList);
 				}
 			});
 		}
 	}
 
-	private void uploadScan(Beacon beacon, BleMeshScanData meshScanData) {
-		Scan scan = new Scan();
-		scan.setTimestamp(meshScanData.getTimeStamp());
+	private void writeToBackupFile(Scan scan) {
+		if (_logFileOpen) {
+			try {
+				_scanBackupDos.write(JsonUtil.toJson(scan.toMap()).toString().getBytes());
+				_scanBackupDos.write("\n".getBytes());
+				_scanBackupDos.flush();
 
-		BleMeshScanData.ScannedDevice[] devices = meshScanData.getDevices();
-		for (BleMeshScanData.ScannedDevice dev : devices) {
-			scan.addScannedDevice(dev.getAddress(), dev.getRssi(), dev.getOccurrences());
+				if (_scanBackupFile.length() > Config.MAX_BACKUP_FILE_SIZE) {
+					_scanBackupDos.close();
+					_logFileOpen = openBackupFile(SinkActivity.this);
+				}
+
+				if (_logFileOpen && _scanBackupFile.getFreeSpace() < Config.MIN_FREE_SPACE) {
+					_scanBackupDos.close();
+					_logFileOpen = false;
+				}
+
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (JSONException e) {
+				e.printStackTrace();
+			}
 		}
+	}
+
+	private void uploadScan(Beacon beacon, Scan scan) {
 
 		beacon.addScan(beacon.getId(), scan, new VoidCallback() {
 			@Override
@@ -303,4 +389,5 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 		listView.setLayoutParams(params);
 		listView.requestLayout();
 	}
+
 }

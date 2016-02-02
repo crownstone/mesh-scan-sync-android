@@ -1,7 +1,13 @@
 package nl.dobots.crownstonehub;
 
+import android.Manifest;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -17,15 +23,22 @@ import android.widget.TextView;
 
 import com.strongloop.android.loopback.AccessToken;
 import com.strongloop.android.loopback.RestAdapter;
+import com.strongloop.android.loopback.callbacks.VoidCallback;
+
+import java.util.HashMap;
 
 import nl.dobots.bluenet.ble.base.callbacks.IStatusCallback;
+import nl.dobots.bluenet.ble.cfg.BleErrors;
 import nl.dobots.bluenet.ble.extended.BleDeviceFilter;
 import nl.dobots.bluenet.ble.extended.BleExt;
 import nl.dobots.bluenet.ble.extended.callbacks.IBleDeviceCallback;
 import nl.dobots.bluenet.ble.extended.structs.BleDevice;
 import nl.dobots.bluenet.ble.extended.structs.BleDeviceList;
+import nl.dobots.crownstonehub.cfg.Config;
 import nl.dobots.crownstonehub.cfg.Settings;
 import nl.dobots.loopback.CrownstoneRestAPI;
+import nl.dobots.loopback.loopback.Beacon;
+import nl.dobots.loopback.loopback.BeaconRepository;
 import nl.dobots.loopback.loopback.User;
 import nl.dobots.loopback.loopback.UserRepository;
 
@@ -79,48 +92,36 @@ public class MainActivity extends AppCompatActivity {
 
 		// create access point to the library and initialize the Bluetooth adapter.
 		_ble = new BleExt();
-		_ble.init(this, new IStatusCallback() {
-			@Override
-			public void onSuccess() {
-				// on success is called whenever bluetooth is enabled
-				Log.i(TAG, "BLE enabled");
-				onBleEnabled();
-			}
-
-			@Override
-			public void onError(int error) {
-				// on error is (also) called whenever bluetooth is disabled
-				Log.e(TAG, "Error: " + error);
-				onBleDisabled();
-			}
-		});
-
-		_restAdapter = CrownstoneRestAPI.initializeApi(this);
+		initializeBle();
 
 		_settings = Settings.getInstance(getApplicationContext());
 
-		// TODO: this should not be necessary once the cloud is running correctly, but because
-		// the heroku app is shutting down if it is idle for some time, the cloud loses the
-		// access tokens, so to be save we login every time we start the app
-		String username = _settings.getUsername();
-		String password = _settings.getPassword();
-		if (!(username.isEmpty() && password.isEmpty())) {
-			final UserRepository userRepo = _restAdapter.createRepository(UserRepository.class);
-			userRepo.getCurrentUserId();
-			userRepo.loginUser(username, password, new UserRepository.LoginCallback() {
+		if (!Config.OFFLINE) {
+			_restAdapter = CrownstoneRestAPI.initializeApi(this);
 
-				@Override
-				public void onSuccess(AccessToken token, User currentUser) {
-					Log.i(TAG, token.getUserId() + ":" + currentUser.getId());
-				}
+			// TODO: this should not be necessary once the cloud is running correctly, but because
+			// the heroku app is shutting down if it is idle for some time, the cloud loses the
+			// access tokens, so to be save we login every time we start the app
+			String username = _settings.getUsername();
+			String password = _settings.getPassword();
+			if (!(username.isEmpty() && password.isEmpty())) {
+				final UserRepository userRepo = _restAdapter.createRepository(UserRepository.class);
+				userRepo.getCurrentUserId();
+				userRepo.loginUser(username, password, new UserRepository.LoginCallback() {
 
-				@Override
-				public void onError(Throwable t) {
-					Log.i(TAG, "error: ", t);
-					startActivity(new Intent(MainActivity.this, LoginActivity.class));
-					return;
-				}
-			});
+					@Override
+					public void onSuccess(AccessToken token, User currentUser) {
+						Log.i(TAG, token.getUserId() + ":" + currentUser.getId());
+					}
+
+					@Override
+					public void onError(Throwable t) {
+						Log.i(TAG, "error: ", t);
+						startActivity(new Intent(MainActivity.this, LoginActivity.class));
+						return;
+					}
+				});
+			}
 		}
 	}
 
@@ -136,11 +137,13 @@ public class MainActivity extends AppCompatActivity {
 	protected void onResume() {
 		super.onResume();
 
-		_userRepository = CrownstoneRestAPI.getUserRepository();
+		if (!Config.OFFLINE) {
+			_userRepository = CrownstoneRestAPI.getUserRepository();
 
-		if (!_userRepository.isLoggedIn()) {
-			startActivity(new Intent(this, LoginActivity.class));
-			return;
+			if (!_userRepository.isLoggedIn()) {
+				startActivity(new Intent(this, LoginActivity.class));
+				return;
+			}
 		}
 
 	}
@@ -281,12 +284,69 @@ public class MainActivity extends AppCompatActivity {
 
 		switch(id) {
 			case R.id.action_login: {
-				startActivity(new Intent(this, LoginActivity.class));
-				break;
+				if (!Config.OFFLINE) {
+					startActivity(new Intent(this, LoginActivity.class));
+					break;
+				}
 			}
 		}
 
 		return super.onOptionsItemSelected(item);
 	}
 
+	private void initializeBle() {
+		_ble.init(this, new IStatusCallback() {
+			@Override
+			public void onSuccess() {
+				// on success is called whenever bluetooth is enabled
+				Log.i(TAG, "BLE enabled");
+				onBleEnabled();
+			}
+
+			@Override
+			public void onError(int error) {
+				// on error is (also) called whenever bluetooth is disabled
+				Log.e(TAG, "Error: " + error);
+				onBleDisabled();
+
+				if (error == BleErrors.ERROR_BLE_PERMISSION_DENIED) {
+					_ble.requestPermissions(MainActivity.this);
+				}
+			}
+		});
+	}
+
+	@Override
+	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+		if (!_ble.handlePermissionResult(requestCode, permissions, grantResults,
+				new IStatusCallback() {
+
+			@Override
+			public void onError(int error) {
+				runOnUiThread(new Runnable() {
+					@Override
+					public void run() {
+						AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+						builder.setTitle("Fatal Error")
+								.setMessage("Cannot scan for devices without permissions. Please " +
+										"grant permissions or uninstall the app again!")
+								.setNeutralButton("OK", new DialogInterface.OnClickListener() {
+									@Override
+									public void onClick(DialogInterface dialog, int which) {
+										MainActivity.this.finish();
+									}
+								});
+						builder.create().show();
+					}
+				});
+			}
+
+			@Override
+			public void onSuccess() {
+				initializeBle();
+			}
+		})) {
+			super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		}
+	}
 }

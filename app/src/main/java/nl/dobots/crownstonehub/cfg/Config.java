@@ -23,6 +23,11 @@ public class Config {
 
 	public static final int MAX_DISPLAY_RESULTS = 50;
 
+	public static final long MIN_FREE_SPACE = 10 * 1024 * 1024; // 10 MB
+	public static final long MAX_BACKUP_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
+
+	public static final boolean OFFLINE = true;
+
 //	public static final int PRESENCE_THRESHOLD = -70;
 //
 //	public static final int LOW_SCAN_INTERVAL = 2000; // milli seconds scanning
