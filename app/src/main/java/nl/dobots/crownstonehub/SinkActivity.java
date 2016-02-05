@@ -20,6 +20,7 @@ import com.strongloop.android.loopback.callbacks.VoidCallback;
 import com.strongloop.android.remoting.JsonUtil;
 
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedWriter;
 import java.io.DataOutputStream;
@@ -242,6 +243,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 			if (_logFileOpen) {
 				_scanBackupDos.flush();
 				_scanBackupDos.close();
+				_logFileOpen = false;
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -303,7 +305,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 				public void run() {
 					_scanList.add(0, meshScanData);
 
-					writeToBackupFile(scan);
+					writeToBackupFile(address, scan);
 
 //					setListViewHeightBasedOnChildren(_deviceList);
 				}
@@ -311,10 +313,15 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 		}
 	}
 
-	private void writeToBackupFile(Scan scan) {
+	private void writeToBackupFile(String address, Scan scan) {
 		if (_logFileOpen) {
 			try {
-				_scanBackupDos.write(JsonUtil.toJson(scan.toMap()).toString().getBytes());
+				JSONObject jsonScan = (JSONObject)JsonUtil.toJson(scan.toMap());
+				// adding source address separately, since it's not a part of the scan
+				// message (only the id is necessary for the cloud part, which is a reference
+				// to the beacon object)
+				jsonScan.put("source_address", address);
+				_scanBackupDos.write(jsonScan.toString().getBytes());
 				_scanBackupDos.write("\n".getBytes());
 				_scanBackupDos.flush();
 
