@@ -50,6 +50,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 
 	private static final String TAG = SinkActivity.class.getCanonicalName();
 
+	private Context _context;
 	private String _address;
 	private BleExt _ble;
 
@@ -63,11 +64,14 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 	private DeviceScanAdapter _deviceScanAdapter;
 
 	private Handler _uiHandler = new Handler();
+	private Handler _watchDogHandler = new Handler();
 
 	private boolean _logFileOpen;
 	private File _scanBackupFile;
 	private OutputStream _scanBackupDos;
 	private BufferedWriter _bufferedWriter;
+
+	private ProgressDialog _progressDialog;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -78,6 +82,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 
 		initUI();
 
+		_context = this;
 		_address = getIntent().getStringExtra("address");
 
 		if (!Config.OFFLINE) {
@@ -101,62 +106,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 			}
 		});
 
-		final ProgressDialog dlg = ProgressDialog.show(this, "Connecting", "Please wait...", true);
-
-		// first we have to connect to the device and discover the available characteristics.
-		_ble.connectAndDiscover(_address, new IDiscoveryCallback() {
-			@Override
-			public void onDiscovery(String serviceUuid, String characteristicUuid) {
-				// this function is called for every detected characteristic with the
-				// characteristic's UUID and the UUID of the service it belongs.
-				// you can keep track of what functions are available on the device,
-				// but you don't have to, the library does that for you.
-			}
-
-			@Override
-			public void onSuccess() {
-				// once discovery is completed, this function will be called. we can now execute
-				// the functions on the device. in this case, we want to know what the current
-				// PWM state is
-				_connected = true;
-
-				// so first we check if the PWM characteristic is available on this device
-				if (_ble.hasCharacteristic(BluenetConfig.MESH_DATA_CHARACTERISTIC_UUID, null)) {
-
-					_ble.subscribeMeshData(SinkActivity.this);
-//					_ble.readMeshData(SinkActivity.this);
-
-					dlg.dismiss();
-
-					_logFileOpen = openBackupFile(SinkActivity.this);
-				} else {
-					// return an error and exit if the PWM characteristic is not available
-//					runOnUiThread(new Runnable() {
-//						@Override
-//						public void run() {
-//							Toast.makeText(SinkActivity.this, "No PWM Characteristic found for this device!", Toast.LENGTH_LONG).show();
-//						}
-//					});
-//					finish();
-					showErrorAlert("No Mesh Characteristic found for this device!");
-				}
-			}
-
-			@Override
-			public void onError(int error) {
-				// an error occurred during connect/discover
-				Log.e(TAG, "failed to connect/discover: " + error);
-				dlg.dismiss();
-//				runOnUiThread(new Runnable() {
-//					@Override
-//					public void run() {
-//						Toast.makeText(SinkActivity.this, "Error during discovery! Please try again", Toast.LENGTH_LONG).show();
-//					}
-//				});
-//				finish();
-				showErrorAlert("Error during discovery! Please try again");
-			}
-		});
+		connectAndDiscover();
 
 //		FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
 //		fab.setOnClickListener(new View.OnClickListener() {
@@ -183,6 +133,105 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 
 	}
 
+	private void connectAndDiscover() {
+		if (_progressDialog != null) {
+			_progressDialog.dismiss();
+			Log.d(TAG, "dismiss progress dialog");
+		}
+		_progressDialog = ProgressDialog.show(_context, "Connecting", "Please wait...", true);
+		Log.d(TAG, "show progress dialog");
+
+		// first we have to connect to the device and discover the available characteristics.
+		_ble.connectAndDiscover(_address, new IDiscoveryCallback() {
+			@Override
+			public void onDiscovery(String serviceUuid, String characteristicUuid) {
+				// this function is called for every detected characteristic with the
+				// characteristic's UUID and the UUID of the service it belongs.
+				// you can keep track of what functions are available on the device,
+				// but you don't have to, the library does that for you.
+			}
+
+			@Override
+			public void onSuccess() {
+				// once discovery is completed, this function will be called. we can now execute
+				// the functions on the device. in this case, we want to know what the current
+				// PWM state is
+				_connected = true;
+
+				// so first we check if the PWM characteristic is available on this device
+				if (_ble.hasCharacteristic(BluenetConfig.MESH_DATA_CHARACTERISTIC_UUID, null)) {
+
+					_ble.subscribeMeshData(SinkActivity.this);
+//					_ble.readMeshData(SinkActivity.this);
+
+					_progressDialog.dismiss();
+					Log.d(TAG, "dismiss progress dialog");
+
+					_logFileOpen = openBackupFile(SinkActivity.this);
+				} else {
+					// return an error and exit if the PWM characteristic is not available
+//					runOnUiThread(new Runnable() {
+//						@Override
+//						public void run() {
+//							Toast.makeText(SinkActivity.this, "No PWM Characteristic found for this device!", Toast.LENGTH_LONG).show();
+//						}
+//					});
+//					finish();
+					showErrorAlert("No Mesh Characteristic found for this device!");
+				}
+			}
+
+			@Override
+			public void onError(int error) {
+				// an error occurred during connect/discover
+				Log.e(TAG, "failed to connect/discover: " + error); // 8 is timeout
+				_progressDialog.dismiss();
+				Log.d(TAG, "dismiss progress dialog");
+//				runOnUiThread(new Runnable() {
+//					@Override
+//					public void run() {
+//						Toast.makeText(SinkActivity.this, "Error during discovery! Please try again", Toast.LENGTH_LONG).show();
+//					}
+//				});
+//				finish();
+
+//				showErrorAlert("Error during discovery! Please try again");
+
+
+				_watchDogHandler.post(new Runnable() {
+					@Override
+					public void run() {
+						_progressDialog = ProgressDialog.show(_context, "Disconnected", "Reconnecting in 10s...", true, true);
+						Log.d(TAG, "show progress dialog");
+						_ble.disconnectAndClose(false, new IStatusCallback() {
+							@Override
+							public void onSuccess() {
+								_watchDogHandler.postDelayed(new Runnable() {
+									@Override
+									public void run() {
+										connectAndDiscover();
+									}
+								}, 10*1000);
+							}
+
+							@Override
+							public void onError(int error) {
+								_watchDogHandler.postDelayed(new Runnable() {
+									@Override
+									public void run() {
+										connectAndDiscover();
+									}
+								}, 10*1000);
+							}
+						});
+
+					}
+				});
+				Log.d(TAG, "Retry in 1s");
+			}
+		});
+	}
+
 	private boolean openBackupFile(Context context) {
 
 		SimpleDateFormat sdf = new SimpleDateFormat("yyMMdd_HHmmss");
@@ -196,6 +245,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 
 //		_scanBackupFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName);
 		try {
+			Log.i(TAG, "Opening backup file: " + _scanBackupFile);
 			path.mkdirs();
 			_scanBackupDos = new DataOutputStream(new FileOutputStream(_scanBackupFile));
 		} catch (IOException e) {
@@ -224,6 +274,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 	@Override
 	protected void onDestroy() {
 		super.onDestroy();
+		_watchDogHandler.removeCallbacksAndMessages(null);
 		if (_connected) {
 			_ble.disconnectAndClose(false, new IStatusCallback() {
 				@Override
@@ -333,6 +384,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 				if (_logFileOpen && _scanBackupFile.getFreeSpace() < Config.MIN_FREE_SPACE) {
 					_scanBackupDos.close();
 					_logFileOpen = false;
+					Log.w(TAG, "Closing log file: few space left");
 				}
 
 			} catch (IOException e) {
