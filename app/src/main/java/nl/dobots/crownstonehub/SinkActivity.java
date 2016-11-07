@@ -42,9 +42,9 @@ import nl.dobots.bluenet.ble.cfg.BluenetConfig;
 import nl.dobots.bluenet.ble.extended.BleExt;
 import nl.dobots.crownstonehub.cfg.Config;
 import nl.dobots.loopback.CrownstoneRestAPI;
-import nl.dobots.loopback.loopback.Beacon;
-import nl.dobots.loopback.loopback.BeaconRepository;
-import nl.dobots.loopback.loopback.Scan;
+import nl.dobots.loopback.loopback.models.Stone;
+import nl.dobots.loopback.loopback.repositories.StoneRepository;
+import nl.dobots.loopback.loopback.models.internal.Scan;
 
 public class SinkActivity extends AppCompatActivity implements IMeshDataCallback {
 
@@ -60,7 +60,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 	private ListView _deviceList;
 
 	private RestAdapter _restAdapter;
-	private BeaconRepository _beaconRepository;
+	private StoneRepository _stoneRepository;
 	private DeviceScanAdapter _deviceScanAdapter;
 
 	private Handler _uiHandler = new Handler();
@@ -87,7 +87,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 
 		if (!Config.OFFLINE) {
 			_restAdapter = CrownstoneRestAPI.getRestAdapter(this);
-			_beaconRepository = CrownstoneRestAPI.getBeaconRepository();
+			_stoneRepository = CrownstoneRestAPI.getStoneRepository();
 		}
 
 		// create our access point to the library, and make sure it is initialized (if it
@@ -307,7 +307,7 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 		finish();
 	}
 
-	HashMap<String, Beacon> _beaconDbCache = new HashMap<>();
+	HashMap<String, Stone> _beaconDbCache = new HashMap<>();
 
 	@Override
 	public void onData(final BleMeshHubData data) {
@@ -334,9 +334,9 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 						if (_beaconDbCache.containsKey(address)) {
 							uploadScan(_beaconDbCache.get(address), scan);
 						} else {
-							_beaconRepository.findByAddress(address, new ObjectCallback<Beacon>() {
+							_stoneRepository.findByAddress(address, new ObjectCallback<Stone>() {
 								@Override
-								public void onSuccess(Beacon beacon) {
+								public void onSuccess(Stone beacon) {
 									_beaconDbCache.put(address, beacon);
 									uploadScan(beacon, scan);
 								}
@@ -395,9 +395,9 @@ public class SinkActivity extends AppCompatActivity implements IMeshDataCallback
 		}
 	}
 
-	private void uploadScan(Beacon beacon, Scan scan) {
+	private void uploadScan(Stone beacon, Scan scan) {
 
-		beacon.addScan(beacon.getId(), scan, new VoidCallback() {
+    beacon.addScan(scan, new VoidCallback() {
 			@Override
 			public void onSuccess() {
 				Log.i(TAG, "success");

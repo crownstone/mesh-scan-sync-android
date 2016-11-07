@@ -37,10 +37,8 @@ import nl.dobots.bluenet.ble.extended.structs.BleDeviceList;
 import nl.dobots.crownstonehub.cfg.Config;
 import nl.dobots.crownstonehub.cfg.Settings;
 import nl.dobots.loopback.CrownstoneRestAPI;
-import nl.dobots.loopback.loopback.Beacon;
-import nl.dobots.loopback.loopback.BeaconRepository;
-import nl.dobots.loopback.loopback.User;
-import nl.dobots.loopback.loopback.UserRepository;
+import nl.dobots.loopback.loopback.models.User;
+import nl.dobots.loopback.loopback.repositories.UserRepository;
 
 /**
  * This example activity shows the use of the bluenet library. The library is first initialized,
@@ -309,7 +307,7 @@ public class MainActivity extends AppCompatActivity {
 				Log.e(TAG, "Error: " + error);
 				onBleDisabled();
 
-				if (error == BleErrors.ERROR_BLE_PERMISSION_DENIED) {
+				if (error == BleErrors.ERROR_BLE_PERMISSION_MISSING) {
 					_ble.requestPermissions(MainActivity.this);
 				}
 			}

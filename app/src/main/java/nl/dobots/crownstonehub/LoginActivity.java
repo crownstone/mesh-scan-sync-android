@@ -37,8 +37,8 @@ import java.util.List;
 
 import nl.dobots.crownstonehub.cfg.Settings;
 import nl.dobots.loopback.CrownstoneRestAPI;
-import nl.dobots.loopback.loopback.User;
-import nl.dobots.loopback.loopback.UserRepository;
+import nl.dobots.loopback.loopback.models.User;
+import nl.dobots.loopback.loopback.repositories.UserRepository;
 
 import static android.Manifest.permission.READ_CONTACTS;
 
