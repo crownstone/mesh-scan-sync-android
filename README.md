@@ -9,13 +9,13 @@ The project depends on bluenet-lib-android and crownstone-loopback-sdk. To insta
 
 1. Clone this project to your disk
 
-        git clone https://github.com/dobots/crownstone-hub
+        git clone https://github.com/crownstone/mesh-scan-sync-android.git
 
 2. Clone the two libraries into the project location
 
         cd path/to/project/location
-        git clone https://github.com/dobots/bluenet-lib-android.git bluenet-lib
-        git clone https://github.com/dobots/crownstone-loopback-sdk.git crownstone-loopback-sdk
+        git clone https://github.com/crownstone/bluenet-lib-android.git bluenet-lib
+        git clone https://github.com/crownstone/crownstone-cloud-lib-android.git crownstone-loopback-sdk
 
     Make sure the folders of the libraries will be called bluenet-lib and crownstone-loopback-sdk
 
